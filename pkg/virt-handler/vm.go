@@ -35,6 +35,8 @@ import (
 	"strings"
 	"time"
 
+	"libvirt.org/go/libvirt"
+
 	"kubevirt.io/kubevirt/pkg/virt-controller/watch/topology"
 	"kubevirt.io/kubevirt/pkg/virt-handler/selinux"
 
@@ -1533,6 +1535,43 @@ func (d *VirtualMachineController) getVMIFromCache(key string) (vmi *v1.VirtualM
 func (d *VirtualMachineController) getDomainFromCache(key string) (domain *api.Domain, exists bool, cachedUID types.UID, err error) {
 
 	obj, exists, err := d.domainInformer.GetStore().GetByKey(key)
+	if !exists {
+		log.Log.Info("Domain is not found. Checking remote hypervisor.")
+		// remoteHypervisorSocket := "/run/peerpod/hypervisor.sock"
+		// conn, err := net.Dial("unix", remoteHypervisorSocket)
+		// if err != nil {
+		// 	log.Log.Infof("failed to connect to remote hypervisor socket: %e", err)
+		// 	return nil, false, "", fmt.Errorf("failed to connect to remote hypervisor socket: %e", err)
+		// }
+		// command := "virsh list --all"
+		// conn.Write([]byte(command + "\n"))
+
+		// // Read the response from the connection
+		// buffer := make([]byte, 1024)
+		// n, err := conn.Read(buffer)
+		// if err != nil {
+		// 	log.Log.Infof("Error Recieved - %e", err)
+		// 	return nil, false, "", fmt.Errorf("Error Recieved - %e", err)
+		// }
+		// response := string(buffer[:n])
+		// log.Log.Infof(response)
+		// defer conn.Close()
+
+		// Define Domain via XML created before.
+		conn, err := libvirt.NewConnect("qemu+ssh://sharath@192.168.242.1/system?no_verify=1")
+		if err != nil {
+			return nil, false, "", err
+		}
+		domains, err := conn.ListAllDomains(1)
+		if err != nil {
+			return nil, false, "", err
+		}
+		for _, domain := range domains {
+			log.Log.Infof("Domain: %+v", domain)
+		}
+		defer conn.Close()
+
+	}
 
 	if err != nil {
 		return nil, false, "", err
