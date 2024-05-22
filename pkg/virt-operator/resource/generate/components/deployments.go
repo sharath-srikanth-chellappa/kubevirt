@@ -220,14 +220,21 @@ func attachProfileVolume(spec *corev1.PodSpec) {
 
 }
 
-func attachCertificateSecret(spec *corev1.PodSpec, secretName string, mountPath string) {
+func attachCertificateSecret(spec *corev1.PodSpec, secretName string, mountPath string, defaultMode ...int32) {
+	var mode int32
+	if len(defaultMode) > 0 {
+		mode = defaultMode[0]
+	} else {
+		mode = int32(420)
+	}
 	True := true
 	secretVolume := corev1.Volume{
 		Name: secretName,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
-				SecretName: secretName,
-				Optional:   &True,
+				SecretName:  secretName,
+				Optional:    &True,
+				DefaultMode: int32Ptr(mode),
 			},
 		},
 	}

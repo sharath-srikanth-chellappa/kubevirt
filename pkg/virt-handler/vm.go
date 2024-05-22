@@ -56,6 +56,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -1557,19 +1559,57 @@ func (d *VirtualMachineController) getDomainFromCache(key string) (domain *api.D
 		// log.Log.Infof(response)
 		// defer conn.Close()
 
-		// Define Domain via XML created before.
-		conn, err := libvirt.NewConnect("qemu+ssh://sharath@192.168.242.1/system?no_verify=1")
+		// creates the in-cluster config
+		config, err := rest.InClusterConfig()
 		if err != nil {
+			log.Log.Info("Error in getting in-cluster config")
+			return nil, false, "", fmt.Errorf("Error in getting in-cluster config")
+		}
+		// creates the clientset
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.Log.Info("Error in creating clientset from in-cluster config")
+			return nil, false, "", fmt.Errorf("Error in creating clientset from in-cluster config")
+		}
+		peerPodsConfigMap, err := clientset.CoreV1().ConfigMaps("default").Get(context.Background(), "peer-pods-cm", metav1.GetOptions{})
+		if peerPodsConfigMap == nil {
+			log.Log.Info("Peer Pods ConfigMap not found")
+			return nil, false, "", fmt.Errorf("Peer Pods ConfigMap not found")
+		} else if err != nil {
+			log.Log.Info("Error in getting Peer Pods ConfigMap")
+			return nil, false, "", fmt.Errorf("Error in getting Peer Pods ConfigMap")
+		}
+		log.Log.Infof("Peer Pods ConfigMap found. Peer Pods ConfigMap Data: %+v", peerPodsConfigMap.Data)
+		libvirtURI := peerPodsConfigMap.Data["LIBVIRT_URI"]
+		log.Log.Infof("LIBVIRT_URI: %s", libvirtURI)
+
+		// Define Domain via XML created before.
+		conn, err := libvirt.NewConnect(libvirtURI)
+		if err != nil {
+			log.Log.Error("Failed to connect to remote hypervisor")
 			return nil, false, "", err
 		}
+		log.Log.Info("Connection created with remote hypervisor")
+		pool, err := conn.LookupStoragePoolByName("default")
+		if err != nil {
+			name, _ := pool.GetName()
+			return nil, false, "", fmt.Errorf("can't find storage pool %q: %v", name, err)
+		}
+		log.Log.Info("Pool found on remote hypervisor")
+
 		domains, err := conn.ListAllDomains(1)
 		if err != nil {
 			return nil, false, "", err
 		}
+		log.Log.Info("Domains found on remote hypervisor")
+
 		for _, domain := range domains {
 			log.Log.Infof("Domain: %+v", domain)
+			name, _ := domain.GetName()
+			if name == key {
+				break
+			}
 		}
-		defer conn.Close()
 
 	}
 

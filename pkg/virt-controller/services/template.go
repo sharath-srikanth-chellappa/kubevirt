@@ -431,6 +431,15 @@ func (t *templateService) renderLaunchManifest(vmi *v1.VirtualMachineInstance, i
 		},
 	})
 
+	if _, ok := compute.Resources.Requests["remote.host/Memory-MiB"]; ok {
+		delete(compute.Resources.Requests, "remote.host/Memory-MiB")
+		delete(compute.Resources.Limits, "remote.host/Memory-MiB")
+	}
+	if _, ok := compute.Resources.Requests["remote.host/vCPU"]; ok {
+		delete(compute.Resources.Requests, "remote.host/vCPU")
+		delete(compute.Resources.Limits, "remote.host/vCPU")
+	}
+
 	// Make sure the compute container is always the first since the mutating webhook shipped with the sriov operator
 	// for adding the requested resources to the pod will add them to the first container of the list
 	containers := []k8sv1.Container{compute}
@@ -1235,6 +1244,30 @@ func generatePodAnnotations(vmi *v1.VirtualMachineInstance) (map[string]string, 
 	}
 
 	annotationsSet[podcmd.DefaultContainerAnnotationName] = "compute"
+
+	logger := log.DefaultLogger()
+	// if _, ok := vmi.Spec.Domain.Resources.Requests["memory"]; ok {
+	// 	logger.Infof("Setting Memory-MiB Annotation in VMI :%s", vmi.Name)
+	// 	memory := vmi.Spec.Domain.Resources.Requests["memory"]
+	// 	vmi.Spec.Domain.Resources.Requests["remote.host/Memory-MiB"] = memory
+	// 	annotationsSet["io.katacontainers.config.hypervisor.default_memory"] = memory.String()
+	// }
+	// if _, ok := vmi.Spec.Domain.Resources.Requests["memory"]; ok {
+	// 	logger.Infof("Setting Memory-MiB Annotation in VMI :%s", vmi.Name)
+	// 	memory := vmi.Spec.Domain.Resources.Requests["memory"]
+	// 	vmi.Spec.Domain.Resources.Requests["remote.host/Memory-MiB"] = memory
+	// 	annotationsSet["io.katacontainers.config.hypervisor.default_memory"] = memory.String()
+	// }
+	if _, ok := vmi.Spec.Domain.Resources.Requests["remote.host/Memory-MiB"]; ok {
+		logger.Infof("Setting Memory-MiB Annotation in VMI :%s", vmi.Name)
+		memory := vmi.Spec.Domain.Resources.Requests["remote.host/Memory-MiB"]
+		annotationsSet["io.katacontainers.config.hypervisor.default_memory"] = memory.String()
+	}
+	if _, ok := vmi.Spec.Domain.Resources.Requests["remote.host/vCPU"]; ok {
+		logger.Infof("Setting vCPU Annotation in VMI :%s", vmi.Name)
+		vcpu := vmi.Spec.Domain.Resources.Requests["remote.host/vCPU"]
+		annotationsSet["io.katacontainers.config.hypervisor.default_vcpus"] = vcpu.String()
+	}
 
 	multusAnnotation, err := generateMultusCNIAnnotation(vmi)
 	if err != nil {
